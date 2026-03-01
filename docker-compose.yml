@@ -14,7 +14,7 @@ services:
       SERVER_HOST: ${SERVER_HOST:-0.0.0.0}
       SERVER_PORT: ${SERVER_PORT:-8080}
     ports:
-      - "8080:8080"
+      - "33101:8080"
     restart: unless-stopped
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
@@ -25,9 +25,9 @@ services:
       dockerfile: Dockerfile
     container_name: rfc2cn-frontend
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:33101}
     ports:
-      - "3000:3000"
+      - "33100:3000"
     depends_on:
       - backend
     restart: unless-stopped
