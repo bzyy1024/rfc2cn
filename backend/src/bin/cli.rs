@@ -213,14 +213,36 @@ async fn cmd_translate(
 
     println!("📋 共有 {} 个段落需要翻译", translations.len());
 
-    // 检查Ollama服务
-    if config.ai_provider == "ollama" {
-        if !services::ai::check_ollama_health(config).await? {
-            return Err(error::AppError::ExternalApiError(
-                "Ollama服务不可用，请确保Ollama正在运行".to_string()
+    // 检查AI配置
+    match &config.ai_provider {
+        Some(provider) if provider == "ollama" => {
+            if !services::ai::check_ollama_health(config).await? {
+                return Err(error::AppError::ExternalApiError(
+                    "Ollama服务不可用，请确保Ollama正在运行".to_string()
+                ));
+            }
+            let default_model = "未配置".to_string();
+            let model = config.ollama_model.as_ref().unwrap_or(&default_model);
+            println!("✅ Ollama服务连接正常，使用模型: {}", model);
+        },
+        Some(provider) if provider == "openai" => {
+            if config.openai_api_key.is_none() {
+                return Err(error::AppError::InternalError(
+                    "OpenAI API Key 未配置".to_string()
+                ));
+            }
+            println!("✅ 使用 OpenAI API 进行翻译");
+        },
+        None => {
+            return Err(error::AppError::InternalError(
+                "AI翻译功能未启用。请设置 AI_PROVIDER 环境变量（ollama 或 openai）".to_string()
+            ));
+        },
+        _ => {
+            return Err(error::AppError::InternalError(
+                format!("不支持的 AI 提供商: {:?}", config.ai_provider)
             ));
         }
-        println!("✅ Ollama服务连接正常，使用模型: {}", config.ollama_model);
     }
 
     // 更新RFC状态
@@ -368,9 +390,18 @@ async fn cmd_parse(db: &db::DbPool, rfc_number: i32) -> Result<()> {
 
 /// 检查Ollama服务
 async fn cmd_check_ollama(config: &Config) -> Result<()> {
+    let ollama_url = config.ollama_url.as_ref()
+        .ok_or_else(|| error::AppError::InternalError(
+            "Ollama配置缺失。请设置 OLLAMA_URL 环境变量".to_string()
+        ))?;
+    let ollama_model = config.ollama_model.as_ref()
+        .ok_or_else(|| error::AppError::InternalError(
+            "Ollama模型配置缺失。请设置 OLLAMA_MODEL 环境变量".to_string()
+        ))?;
+
     println!("🔍 检查Ollama服务状态...");
-    println!("   URL: {}", config.ollama_url);
-    println!("   模型: {}", config.ollama_model);
+    println!("   URL: {}", ollama_url);
+    println!("   模型: {}", ollama_model);
     println!();
 
     // 检查连接
@@ -390,7 +421,7 @@ async fn cmd_check_ollama(config: &Config) -> Result<()> {
                     println!("✅ 找到 {} 个模型\n", models.len());
                     println!("可用模型:");
                     for model in models {
-                        let marker = if model.starts_with(&config.ollama_model) || config.ollama_model.starts_with(&model) { 
+                        let marker = if model.starts_with(ollama_model) || ollama_model.starts_with(&model) { 
                             " ✓ (当前)" 
                         } else { 
                             "" 
@@ -417,9 +448,9 @@ async fn cmd_check_ollama(config: &Config) -> Result<()> {
             println!("   2. 启动 Ollama 服务:");
             println!("      ollama serve");
             println!("   3. 检查端口是否正确:");
-            println!("      curl {}/api/tags", config.ollama_url);
+            println!("      curl {}/api/tags", ollama_url);
             println!("   4. 下载所需模型:");
-            println!("      ollama pull {}", config.ollama_model);
+            println!("      ollama pull {}", ollama_model);
         }
     }
 

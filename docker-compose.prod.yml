@@ -6,9 +6,9 @@ services:
     image: postgres:16-alpine
     container_name: rfc2cn-postgres
     environment:
-      POSTGRES_DB: rfc2cn
-      POSTGRES_USER: rfc2cn
-      POSTGRES_PASSWORD: HK2DbXkBeF6ASsCb
+      POSTGRES_DB: ${POSTGRES_DB:-rfc2cn}
+      POSTGRES_USER: ${POSTGRES_USER:-rfc2cn}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
@@ -45,9 +45,9 @@ services:
       dockerfile: Dockerfile.prod
     container_name: rfc2cn-backend
     environment:
-      DATABASE_URL: postgres://rfc2cn:HK2DbXkBeF6ASsCb@postgres:5432/rfc2cn
-      RUST_LOG: info
-      SERVER_HOST: 0.0.0.0
+      DATABASE_URL: ${DATABASE_URL}
+      RUST_LOG: ${RUST_LOG:-info}
+      SERVER_HOST: ${SERVER_HOST:-0.0.0.0}
       SERVER_PORT: 8080
       OLLAMA_URL: http://ollama:11434
     ports:

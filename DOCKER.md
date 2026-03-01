@@ -158,7 +158,7 @@ Edit `docker-compose.prod.yml` to customize:
 ```yaml
 # Backend configuration
 environment:
-  DATABASE_URL: postgres://rfc2cn:HK2DbXkBeF6ASsCb@postgres:5432/rfc2cn
+  DATABASE_URL: ${DATABASE_URL}  # Set in .env file
   RUST_LOG: info  # Change to 'debug' for more logs
   SERVER_HOST: 0.0.0.0
   SERVER_PORT: 8080

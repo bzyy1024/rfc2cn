@@ -29,6 +29,20 @@
 
 ## 快速开始
 
+### 环境配置
+
+首先配置环境变量：
+
+```bash
+# 复制环境变量示例文件
+cp .env.example .env
+
+# 编辑 .env 文件，设置你的数据库密码等敏感信息
+# 至少需要配置：
+# - DATABASE_URL: 数据库连接字符串（包含密码）
+# - POSTGRES_PASSWORD: PostgreSQL 数据库密码（生产环境）
+```
+
 ### 方式一：Docker部署（推荐）
 
 ```bash
@@ -36,14 +50,18 @@
 git clone <repository-url>
 cd rfc2cn
 
-# 2. 构建并启动所有服务
+# 2. 配置环境变量（见上方"环境配置"）
+cp .env.example .env
+# 编辑 .env 文件
+
+# 3. 构建并启动所有服务
 ./deploy.sh build
 ./deploy.sh up
 
-# 3. 初始化Ollama模型（如需使用AI翻译）
+# 4. 初始化Ollama模型（如需使用AI翻译）
 ./deploy.sh init-ollama
 
-# 4. 同步RFC数据（可选）
+# 5. 同步RFC数据（可选）
 ./deploy.sh cli sync --start 1 --end 100
 
 # 访问服务
@@ -122,8 +140,8 @@ docker-compose up -d postgres
 ```bash
 cd backend
 
-# 配置数据库连接
-export DATABASE_URL="postgres://rfc2cn:HK2DbXkBeF6ASsCb@localhost:5432/rfc2cn"
+# 配置数据库连接（请替换为实际的密码）
+export DATABASE_URL="postgres://rfc2cn:your_password@localhost:5432/rfc2cn"
 
 # 运行服务
 cargo run --bin rfc2cn-server

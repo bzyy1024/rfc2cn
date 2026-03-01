@@ -13,9 +13,9 @@
 BACKEND_IMAGE="rfc2cn-backend:latest"
 NETWORK_NAME="rfc2cn-net"
 PG_CONTAINER="rfc2cn-postgres"
-PG_USER="rfc2cn"
-PG_PASSWORD="HK2DbXkBeF6ASsCb"
-PG_DB="rfc2cn"
+PG_USER="${POSTGRES_USER:-rfc2cn}"
+PG_PASSWORD="${POSTGRES_PASSWORD}"
+PG_DB="${POSTGRES_DB:-rfc2cn}"
 
 # AI 配置（与 server-deploy.sh 保持一致）
 AI_PROVIDER="${AI_PROVIDER:-openai}"

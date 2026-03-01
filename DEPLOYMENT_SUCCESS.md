@@ -82,7 +82,8 @@ cd frontend
 # 安装依赖
 npm install
 
-# 创建环境变量
+# 创建环境变量（请复制 .env.example 并修改）
+cp .env.example .env
 echo "NEXT_PUBLIC_API_URL=http://localhost:8080" > .env.local
 
 # 开发模式
@@ -97,11 +98,20 @@ npm start
 
 ## 📝 配置说明
 
-### 环境变量 (backend/.env)
+### 环境变量
+
+请参考根目录的 `.env.example` 文件，复制并修改为 `.env`：
+
+```bash
+cp .env.example .env
+# 然后编辑 .env 文件，填写实际的数据库密码等信息
+```
+
+原配置说明：
 
 ```env
 # 数据库配置
-DATABASE_URL=postgres://rfc2cn:HK2DbXkBeF6ASsCb@localhost:5432/rfc2cn
+DATABASE_URL=postgres://rfc2cn:your_password@localhost:5432/rfc2cn
 
 # 服务器配置
 SERVER_HOST=0.0.0.0
@@ -153,8 +163,8 @@ done
 # 检查 PostgreSQL 是否运行
 sudo systemctl status postgresql
 
-# 测试连接
-psql postgres://rfc2cn:HK2DbXkBeF6ASsCb@localhost:5432/rfc2cn -c "SELECT 1"
+# 测试连接（请将 your_password 替换为实际密码）
+psql postgres://rfc2cn:your_password@localhost:5432/rfc2cn -c "SELECT 1"
 ```
 
 ### Ollama 不可用

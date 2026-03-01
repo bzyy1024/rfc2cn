@@ -19,7 +19,7 @@
    Port: 5432
    Database: rfc2cn
    Username: rfc2cn
-   Password: HK2DbXkBeF6ASsCb
+   Password: <你的数据库密码>
    ```
 
 3. **运行以下SQL**：
@@ -42,8 +42,8 @@
 # 安装 PostgreSQL 客户端
 sudo apt install postgresql-client
 
-# 重置数据库
-psql "postgres://rfc2cn:HK2DbXkBeF6ASsCb@localhost:5432/rfc2cn" << EOF
+# 重置数据库（请将 your_password 替换为实际密码）
+psql "postgres://rfc2cn:your_password@localhost:5432/rfc2cn" << EOF
 DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
 GRANT ALL ON SCHEMA public TO rfc2cn;

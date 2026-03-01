@@ -29,7 +29,12 @@ async fn main() -> anyhow::Result<()> {
     // 加载配置
     let config = Config::from_env()?;
     tracing::info!("配置加载完成");
-    tracing::info!("AI提供商: {}", config.ai_provider);
+    
+    // 显示 AI 配置状态
+    match &config.ai_provider {
+        Some(provider) => tracing::info!("AI提供商: {}", provider),
+        None => tracing::warn!("AI翻译功能未启用（未配置 AI_PROVIDER）"),
+    }
 
     // 初始化数据库连接池
     let db_pool = db::create_pool(&config.database_url).await?;

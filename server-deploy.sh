@@ -13,9 +13,9 @@ NETWORK_NAME="rfc2cn-net"
 # PostgreSQL 配置
 PG_CONTAINER="rfc2cn-postgres"
 PG_IMAGE="postgres:16-alpine"
-PG_DB="rfc2cn"
-PG_USER="rfc2cn"
-PG_PASSWORD="HK2DbXkBeF6ASsCb"   # ← 建议修改为强密码
+PG_DB="${POSTGRES_DB:-rfc2cn}"
+PG_USER="${POSTGRES_USER:-rfc2cn}"
+PG_PASSWORD="${POSTGRES_PASSWORD}"   # ← 请在环境变量中设置
 PG_DATA_VOLUME="rfc2cn_pgdata"
 PG_PORT="5432"                    # 设为空字符串则不暴露到宿主机
 

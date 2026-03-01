@@ -15,7 +15,7 @@
    端口(Port):      5432
    数据库(Database): rfc2cn
    用户名(Username): rfc2cn
-   密码(Password):  HK2DbXkBeF6ASsCb
+   密码(Password):  <你的数据库密码>
    ```
 
 4. **测试连接**：
