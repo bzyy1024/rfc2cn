@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>RFC API测试</h1>
+    <button onclick="testPage1()">测试第1页</button>
+    <button onclick="testPage2()">测试第2页</button>
+    <pre id="result"></pre>
+
+    <script>
+        async function testPage(page) {
+            const url = `http://localhost:8080/api/rfcs/search?page=${page}&per_page=5`;
+            document.getElementById('result').textContent = `正在请求: ${url}\n\n`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('result').textContent = `错误: ${error.message}`;
+            }
+        }
+
+        function testPage1() {
+            testPage(1);
+        }
+
+        function testPage2() {
+            testPage(2);
+        }
+    </script>
+</body>
+</html>

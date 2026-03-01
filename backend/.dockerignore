@@ -1,0 +1,21 @@
+# Ignore Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Ignore Cargo lock for libraries (keep for binaries)
+# Cargo.lock
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore environment files
+.env
+.env.local
