@@ -13,7 +13,9 @@ RUN apt-get update && apt-get install -y \
 COPY Cargo.toml Cargo.lock ./
 
 # 创建空的 src 目录以缓存依赖
-RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN mkdir -p src/bin \
+    && echo "fn main() {}" > src/main.rs \
+    && echo "fn main() {}" > src/bin/cli.rs
 RUN cargo build --release
 RUN rm -rf src
 
