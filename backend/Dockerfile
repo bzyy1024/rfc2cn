@@ -1,5 +1,5 @@
 # 多阶段构建
-FROM rust:1.75-slim as builder
+FROM rust:1.82-slim as builder
 
 WORKDIR /app
 
@@ -35,9 +35,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 从构建阶段复制二进制文件
-COPY --from=builder /app/target/release/rfc2cn-backend /app/rfc2cn-backend
-COPY --from=builder /app/migrations /app/migrations
+COPY --from=builder /app/target/release/rfc2cn-server /app/rfc2cn-server
 
 EXPOSE 8080
 
-CMD ["/app/rfc2cn-backend"]
+CMD ["/app/rfc2cn-server"]
