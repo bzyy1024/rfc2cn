@@ -220,7 +220,7 @@ cargo run --bin rfc-cli sync --start 1 --end 100 --concurrent 1
 cargo run --bin rfc-cli sync
 
 
-/usr/bin/nohup ./rfc-cli sync --start 1 --end 10000 --concurrent 1 > log.log 2>&1 &
+/usr/bin/nohup ./rfc-cli sync --start 605 --end 10000 --concurrent 2 > log.log 2>&1 &
 
 ```
 
