@@ -27,7 +27,8 @@ services:
       dockerfile: Dockerfile
     container_name: rfc2cn-frontend
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:33101}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://host.docker.internal:33101}
+      API_URL: ${API_URL:-http://backend:8080}
     ports:
       - "33100:3000"
     depends_on:

@@ -1,4 +1,9 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+// API_URL is a server-side-only var used for internal Docker network requests (SSR).
+// NEXT_PUBLIC_API_URL is the browser-facing public URL.
+const API_BASE_URL =
+  (typeof window === 'undefined' ? process.env.API_URL : undefined) ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8080';
 
 export interface Rfc {
   id: number;
