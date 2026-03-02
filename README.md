@@ -222,6 +222,8 @@ cargo run --bin rfc-cli sync
 
 /usr/bin/nohup ./rfc-cli sync --start 605 --end 10000 --concurrent 2 > log.log 2>&1 &
 
+/usr/bin/nohup ./rfc-cli-que sync --start 780 --end 10000 --concurrent 2 > log.log 2>&1 &
+
 ```
 
 #### 同步逻辑

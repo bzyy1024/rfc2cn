@@ -11,6 +11,7 @@
 
 use clap::{Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 // 引入主程序的模块
@@ -561,125 +562,161 @@ fn parse_rfc_sections(text: &str) -> Vec<(String, String)> {
 }
 
 /// 自动同步RFC
+///
+/// 使用生产者/消费者流水线：
+///   生产者任务 —— 依次获取并解析 RFC（网络 I/O），完成后推入有界通道（容量 10）
+///   消费者（主任务）—— 持续从通道取出 RFC 进行翻译（GPU 运算）
+/// 两者并发运行，GPU 不再因等待下载而空闲。
 async fn cmd_sync(
     db: &db::DbPool,
     config: &Config,
     start: i32,
     end: Option<i32>,
     skip_translate: bool,
-    concurrent: usize,
+    _concurrent: usize,
 ) -> Result<()> {
     println!("🔄 开始自动同步 RFC...");
     println!("📌 起始编号: {}", start);
-    
+
     // 确定结束编号
     let end_number = if let Some(e) = end {
         println!("📌 结束编号: {}", e);
         e
     } else {
-        // 尝试获取最新的RFC编号（这里简化处理，实际可以从RFC编辑器网站API获取）
-        println!("📌 结束编号: 自动检测最新RFC");
-        9999 // 默认上限
+        println!("📌 结束编号: 自动检测（上限 9999）");
+        9999
     };
-    
+
     if start > end_number {
         println!("❌ 起始编号不能大于结束编号");
         return Ok(());
     }
-    
-    let mut stats = SyncStats {
+
+    // 共享统计（生产者与消费者均可更新）
+    let stats = Arc::new(Mutex::new(SyncStats {
         total: 0,
         added: 0,
         skipped: 0,
         translated: 0,
         failed: 0,
-    };
-    
-    println!("\n🚀 开始同步...\n");
-    
-    // 获取已存在的RFC编号
-    let existing_rfcs: Vec<i32> = sqlx::query_scalar("SELECT rfc_number FROM rfcs")
-        .fetch_all(db)
-        .await?;
-    
-    for rfc_number in start..=end_number {
-        stats.total += 1;
-        
-        // 检查是否已存在
-        if existing_rfcs.contains(&rfc_number) {
-            // 检查是否已翻译
-            let translation_count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM translations t 
-                 JOIN rfcs r ON t.rfc_id = r.id 
-                 WHERE r.rfc_number = $1 AND t.translated_text IS NOT NULL"
-            )
-            .bind(rfc_number)
-            .fetch_one(db)
-            .await?;
-            
-            if translation_count > 0 || skip_translate {
-                println!("⏭️  RFC {} 已存在{}，跳过", 
-                    rfc_number, 
-                    if translation_count > 0 { "且已翻译" } else { "" }
-                );
-                stats.skipped += 1;
-                continue;
-            }
-            
-            // 已存在但未翻译，需要翻译
-            println!("📝 RFC {} 已存在但未翻译，开始翻译...", rfc_number);
-            match cmd_translate(db, config, rfc_number, false).await {
-                Ok(_) => {
-                    stats.translated += 1;
-                    println!("✅ RFC {} 翻译完成", rfc_number);
+    }));
+
+    // ── 翻译队列：容量 10 ──────────────────────────────────────────────────────
+    // 生产者最多领先消费者（翻译器）10 个 RFC，确保 GPU 持续有工作可做。
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<i32>(10);
+
+    // 克隆，供生产者任务使用
+    let db_fetch = db.clone();
+    let config_fetch = config.clone();
+    let stats_fetch = Arc::clone(&stats);
+
+    println!("\n🚀 流水线启动（获取与翻译并发运行）...\n");
+
+    // ── 生产者任务：获取 RFC 并写入数据库 ────────────────────────────────────
+    let fetch_handle = tokio::spawn(async move {
+        // 一次性读取已有 RFC 编号，避免在循环内重复查询
+        let existing_rfcs: Vec<i32> =
+            sqlx::query_scalar("SELECT rfc_number FROM rfcs")
+                .fetch_all(&db_fetch)
+                .await
+                .unwrap_or_default();
+
+        for rfc_number in start..=end_number {
+            stats_fetch.lock().unwrap().total += 1;
+
+            if existing_rfcs.contains(&rfc_number) {
+                // 检查该 RFC 是否已有翻译
+                let count: i64 = sqlx::query_scalar(
+                    "SELECT COUNT(*) FROM translations t \
+                     JOIN rfcs r ON t.rfc_id = r.id \
+                     WHERE r.rfc_number = $1 AND t.translated_text IS NOT NULL",
+                )
+                .bind(rfc_number)
+                .fetch_one(&db_fetch)
+                .await
+                .unwrap_or(0);
+
+                if count > 0 || skip_translate {
+                    println!(
+                        "⏭️  RFC {} 已存在{}，跳过",
+                        rfc_number,
+                        if count > 0 { "且已翻译" } else { "" }
+                    );
+                    stats_fetch.lock().unwrap().skipped += 1;
+                    continue;
                 }
-                Err(e) => {
-                    println!("❌ RFC {} 翻译失败: {}", rfc_number, e);
-                    stats.failed += 1;
+
+                // 已存在但未翻译 → 直接推入翻译队列
+                println!("📥 RFC {} 已存在但未翻译，推入翻译队列", rfc_number);
+                if tx.send(rfc_number).await.is_err() {
+                    break; // 消费者已关闭
                 }
-            }
-            continue;
-        }
-        
-        // RFC不存在，尝试添加
-        println!("➕ 添加 RFC {}...", rfc_number);
-        match cmd_add(db, config, rfc_number, !skip_translate).await {
-            Ok(_) => {
-                stats.added += 1;
+            } else {
+                // 从 IETF 获取 RFC 文本并解析段落
+                println!("⬇️  获取 RFC {}...", rfc_number);
+                let rfc = match services::rfc::fetch_rfc(&db_fetch, &config_fetch, rfc_number).await {
+                    Ok(r) => r,
+                    Err(e) => {
+                        let msg = e.to_string();
+                        if msg.contains("404") || msg.contains("Not Found") {
+                            stats_fetch.lock().unwrap().skipped += 1;
+                        } else {
+                            println!("❌ RFC {} 获取失败: {}", rfc_number, e);
+                            stats_fetch.lock().unwrap().failed += 1;
+                        }
+                        continue;
+                    }
+                };
+
+                if let Err(e) = parse_and_save_sections(&db_fetch, &rfc).await {
+                    println!("❌ RFC {} 解析失败: {}", rfc_number, e);
+                    stats_fetch.lock().unwrap().failed += 1;
+                    continue;
+                }
+
+                stats_fetch.lock().unwrap().added += 1;
+                println!("✅ RFC {} 获取完成，推入翻译队列", rfc_number);
+
                 if !skip_translate {
-                    stats.translated += 1;
+                    if tx.send(rfc_number).await.is_err() {
+                        break; // 消费者已关闭
+                    }
                 }
-                println!("✅ RFC {} 添加成功{}", 
-                    rfc_number,
-                    if !skip_translate { "并已翻译" } else { "" }
-                );
+
+                // 轻微速率限制，避免对 IETF 服务器造成压力
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+            }
+        }
+        // tx 在此被丢弃，通道关闭，消费者的 while-let 循环随即退出
+    });
+
+    // ── 消费者：持续从队列取出 RFC 进行翻译，GPU 不空闲 ─────────────────────
+    while let Some(rfc_number) = rx.recv().await {
+        println!("🌐 翻译 RFC {}...", rfc_number);
+        match cmd_translate(db, config, rfc_number, false).await {
+            Ok(_) => {
+                stats.lock().unwrap().translated += 1;
+                println!("✅ RFC {} 翻译完成", rfc_number);
             }
             Err(e) => {
-                // RFC可能不存在，这是正常的
-                if e.to_string().contains("404") || e.to_string().contains("Not Found") {
-                    // 静默跳过不存在的RFC
-                    stats.skipped += 1;
-                } else {
-                    println!("❌ RFC {} 添加失败: {}", rfc_number, e);
-                    stats.failed += 1;
-                }
+                println!("❌ RFC {} 翻译失败: {}", rfc_number, e);
+                stats.lock().unwrap().failed += 1;
             }
         }
-        
-        // 简单的速率限制
-        if concurrent == 1 {
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        }
     }
-    
-    // 打印统计
-    println!("\n\n📊 同步统计:");
-    println!("   总计: {}", stats.total);
-    println!("   ✅ 新增: {}", stats.added);
-    println!("   📝 翻译: {}", stats.translated);
-    println!("   ⏭️  跳过: {}", stats.skipped);
-    println!("   ❌ 失败: {}", stats.failed);
-    
+
+    // 等待生产者任务彻底结束
+    let _ = fetch_handle.await;
+
+    // 打印最终统计
+    let s = stats.lock().unwrap();
+    println!("\n📊 同步统计:");
+    println!("   总计:    {}", s.total);
+    println!("   ✅ 新增:  {}", s.added);
+    println!("   📝 翻译:  {}", s.translated);
+    println!("   ⏭️  跳过:  {}", s.skipped);
+    println!("   ❌ 失败:  {}", s.failed);
+
     Ok(())
 }
 
