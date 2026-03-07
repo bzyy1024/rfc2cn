@@ -8,6 +8,7 @@ pub struct Config {
     // Ollama配置（可选）
     pub ollama_url: Option<String>,
     pub ollama_model: Option<String>,
+    pub ollama_timeout_secs: u64,
     // OpenAI兼容API配置（可选，用于备用或其他AI服务）
     pub openai_api_key: Option<String>,
     pub openai_api_base: Option<String>,
@@ -31,6 +32,10 @@ impl Config {
             // Ollama配置（可选）
             ollama_url: std::env::var("OLLAMA_URL").ok(),
             ollama_model: std::env::var("OLLAMA_MODEL").ok(),
+            ollama_timeout_secs: std::env::var("OLLAMA_TIMEOUT_SECS")
+                .unwrap_or_else(|_| "300".to_string())
+                .parse()
+                .unwrap_or(300),
             // OpenAI配置（可选）
             openai_api_key: std::env::var("OPENAI_API_KEY").ok(),
             openai_api_base: std::env::var("OPENAI_API_BASE").ok(),

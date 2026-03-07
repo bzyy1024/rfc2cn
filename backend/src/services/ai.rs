@@ -124,7 +124,7 @@ pub async fn translate_with_ollama(config: &Config, text: &str) -> Result<String
         .post(&url)
         .header("Content-Type", "application/json")
         .json(&request)
-        .timeout(std::time::Duration::from_secs(300)) // 5分钟超时
+        .timeout(std::time::Duration::from_secs(config.ollama_timeout_secs))
         .send()
         .await
         .map_err(|e| AppError::ExternalApiError(format!("调用 Ollama API 失败: {}", e)))?;
