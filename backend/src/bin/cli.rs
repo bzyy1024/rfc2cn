@@ -703,6 +703,8 @@ async fn cmd_sync(
                 stats.lock().unwrap().failed += 1;
             }
         }
+
+        tokio::time::sleep(Duration::from_secs(5)).await;
     }
 
     // 等待生产者任务彻底结束
