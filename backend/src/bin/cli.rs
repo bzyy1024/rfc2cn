@@ -625,29 +625,29 @@ async fn cmd_sync(
             stats_fetch.lock().unwrap().total += 1;
 
             if existing_rfcs.contains(&rfc_number) {
-                // 检查该 RFC 是否已有翻译
-                let count: i64 = sqlx::query_scalar(
+                // 检查该 RFC 是否还有未翻译的段落（包括翻译中断的情况）
+                let untranslated_count: i64 = sqlx::query_scalar(
                     "SELECT COUNT(*) FROM translations t \
                      JOIN rfcs r ON t.rfc_id = r.id \
-                     WHERE r.rfc_number = $1 AND t.translated_text IS NOT NULL",
+                     WHERE r.rfc_number = $1 AND t.translated_text IS NULL",
                 )
                 .bind(rfc_number)
                 .fetch_one(&db_fetch)
                 .await
                 .unwrap_or(0);
 
-                if count > 0 || skip_translate {
+                if untranslated_count == 0 || skip_translate {
                     println!(
                         "⏭️  RFC {} 已存在{}，跳过",
                         rfc_number,
-                        if count > 0 { "且已翻译" } else { "" }
+                        if untranslated_count == 0 { "且已翻译完成" } else { "" }
                     );
                     stats_fetch.lock().unwrap().skipped += 1;
                     continue;
                 }
 
-                // 已存在但未翻译 → 直接推入翻译队列
-                println!("📥 RFC {} 已存在但未翻译，推入翻译队列", rfc_number);
+                // 已存在但有未翻译段落（含翻译中的）→ 推入翻译队列
+                println!("📥 RFC {} 已存在但有 {} 个未翻译段落，推入翻译队列", rfc_number, untranslated_count);
                 if tx.send(rfc_number).await.is_err() {
                     break; // 消费者已关闭
                 }
