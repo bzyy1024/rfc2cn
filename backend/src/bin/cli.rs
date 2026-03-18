@@ -246,8 +246,10 @@ async fn cmd_translate(
         }
     }
 
-    // 更新RFC状态
-    services::rfc::update_rfc_status(db, rfc.id, "translating".to_string()).await?;
+    // 更新RFC状态（失败不中止，继续翻译）
+    if let Err(e) = services::rfc::update_rfc_status(db, rfc.id, "translating".to_string()).await {
+        tracing::warn!("更新 RFC {} 状态为 translating 失败，继续翻译: {}", rfc_number, e);
+    }
 
     // 创建进度条
     let pb = ProgressBar::new(translations.len() as u64);
@@ -266,15 +268,41 @@ async fn cmd_translate(
 
         match services::ai::translate_text(config, &translation.original_text).await {
             Ok(translated) => {
-                // 保存翻译结果
-                sqlx::query(
-                    "UPDATE translations SET translated_text = $1 WHERE id = $2"
-                )
-                .bind(&translated)
-                .bind(translation.id)
-                .execute(db)
-                .await?;
-                success_count += 1;
+                // 保存翻译结果，遇到数据库错误时重试最多 3 次
+                let mut saved = false;
+                for attempt in 1u32..=3 {
+                    match sqlx::query(
+                        "UPDATE translations SET translated_text = $1 WHERE id = $2"
+                    )
+                    .bind(&translated)
+                    .bind(translation.id)
+                    .execute(db)
+                    .await
+                    {
+                        Ok(_) => {
+                            saved = true;
+                            break;
+                        }
+                        Err(e) if attempt < 3 => {
+                            tracing::warn!(
+                                "保存段落 {} 失败 (尝试 {}/3): {}，{}s 后重试...",
+                                translation.section_id, attempt, e, attempt * 2
+                            );
+                            tokio::time::sleep(Duration::from_secs((attempt * 2) as u64)).await;
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                "保存段落 {} 失败，已重试 3 次，跳过: {}",
+                                translation.section_id, e
+                            );
+                        }
+                    }
+                }
+                if saved {
+                    success_count += 1;
+                } else {
+                    error_count += 1;
+                }
             }
             Err(e) => {
                 tracing::error!("翻译段落 {} 失败: {}", translation.section_id, e);
@@ -287,13 +315,15 @@ async fn cmd_translate(
 
     pb.finish_with_message("翻译完成");
 
-    // 更新RFC状态
+    // 更新RFC状态（失败不中止，结果已保存）
     let new_status = if error_count == 0 {
         "completed"
     } else {
         "reviewing"
     };
-    services::rfc::update_rfc_status(db, rfc.id, new_status.to_string()).await?;
+    if let Err(e) = services::rfc::update_rfc_status(db, rfc.id, new_status.to_string()).await {
+        tracing::warn!("更新 RFC {} 最终状态失败，翻译结果已保存: {}", rfc_number, e);
+    }
 
     println!("\n📊 翻译结果:");
     println!("   ✅ 成功: {}", success_count);
@@ -470,28 +500,40 @@ async fn parse_and_save_sections(db: &db::DbPool, rfc: &models::Rfc) -> Result<(
 
     for (section_id, content) in sections {
         // 检查是否已存在
-        let existing = sqlx::query_as::<_, models::Translation>(
+        let existing = match sqlx::query_as::<_, models::Translation>(
             "SELECT * FROM translations WHERE rfc_id = $1 AND section_id = $2"
         )
         .bind(rfc.id)
         .bind(&section_id)
         .fetch_optional(db)
-        .await?;
+        .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("检查段落 {} 是否存在时失败，跳过: {}", section_id, e);
+                continue;
+            }
+        };
 
         if existing.is_none() {
-            sqlx::query(
+            if let Err(e) = sqlx::query(
                 "INSERT INTO translations (rfc_id, section_id, original_text) VALUES ($1, $2, $3)"
             )
             .bind(rfc.id)
             .bind(&section_id)
             .bind(&content)
             .execute(db)
-            .await?;
+            .await
+            {
+                tracing::warn!("插入段落 {} 失败，跳过: {}", section_id, e);
+            }
         }
     }
 
-    // 更新RFC状态
-    services::rfc::update_rfc_status(db, rfc.id, "parsing".to_string()).await?;
+    // 更新RFC状态（失败不中止）
+    if let Err(e) = services::rfc::update_rfc_status(db, rfc.id, "parsing".to_string()).await {
+        tracing::warn!("更新 RFC {} 状态为 parsing 失败: {}", rfc.id, e);
+    }
 
     Ok(())
 }
